@@ -28,22 +28,44 @@ bun install
 
 ## Usage
 
+The tool never writes to your account unless you pass `--apply` — every command is a dry run by default and just (re)builds `report.md` for you to review first.
+
+### First run
+
 ```sh
-# dry run: build report.md without writing anything
+# 1. dry run — classify everything and write report.md, but touch nothing
 bun run src/main.ts
 
-# on a subset
+# (optional) try it on a handful of repos first
 bun run src/main.ts --limit 20
 
-# write the assignments to your account
+# 2. read report.md to see what would go where, then commit for real
 bun run src/main.ts --apply
-
-# re-evaluate already-sorted repos under the current abandonment rules
-bun run src/main.ts --resort            # dry
-bun run src/main.ts --resort --apply    # write
 ```
 
-Flags: `--apply` (write; dry run by default), `--limit N`, `--resort`.
+That first `--apply` creates the category lists on your account and files every **naked** star (one not already in a list you made by hand) into them. AI decisions are cached in `cache.json`, so this is the only time the model classifies everything from scratch.
+
+### Later runs
+
+Re-run whenever your stars or the tool's rules change — it's incremental and cheap (the cache means already-classified repos aren't re-sent to the model):
+
+```sh
+# You starred new repos → sort just the new naked stars (dry, then apply)
+bun run src/main.ts
+bun run src/main.ts --apply
+
+# Re-check already-sorted repos against the abandonment rules and move the
+# newly-dead ones into "Abandoned"
+bun run src/main.ts --resort
+bun run src/main.ts --resort --apply
+
+# You edited the categories in src/config.ts → re-classify everything the tool
+# previously sorted under the new taxonomy (see "Configuring categories" below)
+bun run src/main.ts --recategorize
+bun run src/main.ts --recategorize --apply
+```
+
+Flags: `--apply` (write; dry run by default), `--limit N`, `--resort`, `--recategorize`.
 
 ## Configuring categories
 
