@@ -69,11 +69,14 @@ export interface ListMeta {
   name: string;
 }
 
-// All of the user's lists: name → metadata, plus the set of repo ids already
-// in at least one list (the "non-naked" stars).
+// All of the user's lists: name → metadata, the set of repo ids already in at
+// least one list (the "non-naked" stars), and per-repo membership (repo id →
+// list names it currently belongs to). Membership lets the writer preserve a
+// repo's manual lists when replacing its tool-managed ones.
 export async function fetchLists(): Promise<{
   byName: Map<string, ListMeta>;
   assigned: Set<string>;
+  membership: Map<string, string[]>;
 }> {
   const listsData = await runGraphQL(`
     { viewer { lists(first: 50) { nodes { id name } } } }
@@ -83,6 +86,7 @@ export async function fetchLists(): Promise<{
   for (const n of nodes) byName.set(n.name, { id: n.id, name: n.name });
 
   const assigned = new Set<string>();
+  const membership = new Map<string, string[]>();
   for (const list of nodes) {
     let after: string | null = null;
     while (true) {
@@ -101,12 +105,18 @@ export async function fetchLists(): Promise<{
       `);
       const items = data.node?.items;
       if (!items) break;
-      for (const it of items.nodes) if (it?.id) assigned.add(it.id);
+      for (const it of items.nodes) {
+        if (!it?.id) continue;
+        assigned.add(it.id);
+        (membership.get(it.id) ?? membership.set(it.id, []).get(it.id)!).push(
+          list.name,
+        );
+      }
       if (!items.pageInfo.hasNextPage) break;
       after = items.pageInfo.endCursor;
     }
   }
-  return { byName, assigned };
+  return { byName, assigned, membership };
 }
 
 // Flake safety net: in a heavy paginated query GitHub occasionally returns
@@ -211,17 +221,19 @@ export async function createList(
   return { id: list.id, name: list.name };
 }
 
-// Set the single list membership of a repository (set semantics).
-// Safe only for "naked" stars.
-export async function setRepoList(
+// Set the full list membership of a repository (set semantics — this REPLACES
+// every list the repo is in with exactly the given ids). Pass the complete
+// desired set, including any manual lists to preserve.
+export async function setRepoLists(
   repoId: string,
-  listId: string,
+  listIds: string[],
 ): Promise<void> {
+  const ids = listIds.map((id) => `"${id}"`).join(", ");
   await runGraphQL(`
     mutation {
       updateUserListsForItem(input: {
         itemId: "${repoId}",
-        listIds: ["${listId}"]
+        listIds: [${ids}]
       }) {
         item { __typename }
       }

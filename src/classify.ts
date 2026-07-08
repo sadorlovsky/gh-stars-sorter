@@ -15,16 +15,23 @@ const client = new Anthropic();
 
 const SYSTEM = [
   "You classify GitHub repositories into starred-repo lists.",
-  "For each repository, pick EXACTLY ONE most-fitting list from the set below.",
+  "For each repository, return ALL lists that clearly apply. A repository may",
+  "belong to SEVERAL lists at once — include every one that genuinely fits.",
   "",
   "Lists:",
   ...CATEGORIES.map((c) => `- ${c.slug}: ${c.description}`),
-  `- ${UNCATEGORIZED_SLUG}: none of the above fits confidently.`,
+  `- ${UNCATEGORIZED_SLUG}: use ONLY when none of the real lists fit.`,
   "",
   "Rules:",
-  "- Assign a repo to a list only if it CLEARLY belongs there by nature. When in doubt, use uncategorized (better to under-file than to misfile).",
-  "- Ordinary libraries, plugins, and frameworks meant to be embedded in other code (especially frontend jQuery/JS plugins and Ruby/Rails gems) are almost always uncategorized — EXCEPT when they are clearly about databases/storage/search/cache (stack), AI/ML (ai-ml), a self-hosted service, downloading/archiving content (data-hoarding), or privacy/security (privacy-security).",
+  "- Add a list only if the repo CLEARLY belongs there by its nature; don't stretch.",
+  "- Multi-label is expected and encouraged when a repo spans concerns. Examples:",
+  "  a local-first AI tool → ai-ml + environment; a self-hosted media downloader → self-hosted + data-hoarding;",
+  "  a React charting lib → frontend + libraries; an SVG icon set for the web → frontend.",
+  "- Frontend/web libraries, UI components, CSS tooling and JS plugins DO belong in 'frontend' (this is a real list now — do NOT dump them in uncategorized).",
+  "- A tool that acts on a codebase/build/release pipeline → dev-tooling; a library you import into app code → libraries; a standalone service you deploy → stack/self-hosted.",
   "- Do NOT put application-level libraries or general-purpose dev utilities in environment — only the developer's own personal tooling and environment configs.",
+  "- 'lists' MUST be non-empty. If nothing real fits, return exactly [\"uncategorized\"].",
+  "  Never combine 'uncategorized' with any other list.",
   "",
   "Return a result for EVERY repository, using its full name (owner/name) as the repo field.",
 ].join("\n");
@@ -38,9 +45,13 @@ const SCHEMA = {
         type: "object",
         properties: {
           repo: { type: "string" },
-          list: { type: "string", enum: ALL_SLUGS },
+          lists: {
+            type: "array",
+            items: { type: "string", enum: ALL_SLUGS },
+            minItems: 1,
+          },
         },
-        required: ["repo", "list"],
+        required: ["repo", "lists"],
         additionalProperties: false,
       },
     },
@@ -58,7 +69,16 @@ function repoLine(r: Repo): string {
   return `${head}${desc}`;
 }
 
-async function classifyBatch(batch: Repo[]): Promise<Map<string, string>> {
+// Normalize a raw model list of slugs: keep only known slugs; drop
+// 'uncategorized' if combined with real lists; fall back to ['uncategorized'].
+function normalizeSlugs(raw: string[]): string[] {
+  const known = raw.filter((s) => ALL_SLUGS.includes(s));
+  const real = known.filter((s) => s !== UNCATEGORIZED_SLUG);
+  const uniq = [...new Set(real.length ? real : [UNCATEGORIZED_SLUG])];
+  return uniq;
+}
+
+async function classifyBatch(batch: Repo[]): Promise<Map<string, string[]>> {
   const user =
     "Repositories:\n" + batch.map((r) => `- ${repoLine(r)}`).join("\n");
 
@@ -76,12 +96,12 @@ async function classifyBatch(batch: Repo[]): Promise<Map<string, string>> {
     .join("");
 
   const parsed = JSON.parse(text) as {
-    results: { repo: string; list: string }[];
+    results: { repo: string; lists: string[] }[];
   };
 
-  const out = new Map<string, string>();
-  for (const { repo, list } of parsed.results) {
-    out.set(repo, ALL_SLUGS.includes(list) ? list : UNCATEGORIZED_SLUG);
+  const out = new Map<string, string[]>();
+  for (const { repo, lists } of parsed.results) {
+    out.set(repo, normalizeSlugs(lists ?? []));
   }
   return out;
 }
@@ -100,18 +120,18 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 }
 
 // Classify every repository in batches.
-// Returns a map of nameWithOwner → slug. onProgress(done, total).
+// Returns a map of nameWithOwner → slug[] (multi-label). onProgress(done, total).
 export async function classifyAll(
   repos: Repo[],
   onProgress?: (done: number, total: number) => void,
-): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
   for (let i = 0; i < repos.length; i += BATCH_SIZE) {
     const batch = repos.slice(i, i + BATCH_SIZE);
     const labels = await withRetry(() => classifyBatch(batch));
     for (const r of batch) {
       // if the model didn't return an entry for a repo, treat it as uncategorized
-      result.set(r.nameWithOwner, labels.get(r.nameWithOwner) ?? UNCATEGORIZED_SLUG);
+      result.set(r.nameWithOwner, labels.get(r.nameWithOwner) ?? [UNCATEGORIZED_SLUG]);
     }
     onProgress?.(Math.min(i + BATCH_SIZE, repos.length), repos.length);
   }

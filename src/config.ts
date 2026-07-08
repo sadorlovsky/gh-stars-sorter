@@ -66,6 +66,42 @@ export const CATEGORIES: Category[] = [
     description:
       "Privacy and security: VPNs, proxies, censorship circumvention, encryption, security tooling. Examples: hysteria, streisand, setup-ipsec-vpn.",
   },
+  {
+    slug: "frontend",
+    listName: "Frontend & Web",
+    description:
+      "Web/UI development: JS/TS frontend frameworks and their ecosystems (React, Vue, Svelte, Solid, Astro, Next, Remix, Hono), state management, routing, CSS frameworks and styling (Tailwind, styled-components, PostCSS), animation, UI component libraries and widgets, icon/font sets, web components, and browser/HTML5 game engines. Examples: svelte, tailwindcss, GSAP, shadcn-ui, tabler-icons, phaser.",
+  },
+  {
+    slug: "dev-tooling",
+    listName: "Dev tooling",
+    description:
+      "Tools that act ON a codebase or the build/release pipeline (not libraries you import into an app): bundlers and build tools (vite, esbuild, parcel, rspack), compilers/transpilers, linters and formatters (eslint, biome, black, prettier), test runners and frameworks (vitest, ava), git tooling, and CI/CD & deployment tools (fastlane, serverless, semantic-release).",
+  },
+  {
+    slug: "libraries",
+    listName: "Libraries & utilities",
+    description:
+      "General-purpose programming libraries you import into application code, in ANY language: date/time (date-fns, dayjs), validation & schemas (zod, yup), HTTP clients (got, ky, requests), functional programming (fp-ts), small utilities (nanoid, ms, lodash-likes), auth/OAuth libraries (jose, next-auth), ORMs/query builders (drizzle, kysely). Distinction from 'stack': stack is a standalone backend service you deploy; libraries is code you embed. If it also renders UI/DOM, prefer 'frontend'.",
+  },
+  {
+    slug: "learning",
+    listName: "Learning & references",
+    description:
+      "Knowledge, not code: awesome-lists, books, tutorials, roadmaps, cheatsheets, interview-prep, curated resource collections, and best-practice guides. Examples: free-programming-books, awesome-*, system-design-primer, developer-roadmap, coding-interview-university.",
+  },
+  {
+    slug: "media",
+    listName: "Media processing",
+    description:
+      "Working with images, video, or audio: processing/transform/encode libraries and tools (sharp, squoosh, ffmpeg.wasm, tesseract.js, moviepy), media players (mpv, iina, hls.js), audio frameworks (howler, Tone.js), and creative-coding/graphics (p5.js).",
+  },
+  {
+    slug: "desktop-native",
+    listName: "Desktop & native apps",
+    description:
+      "Building or running desktop/mobile native applications: desktop app shells (tauri, electron, Pake), cross-platform native frameworks (capacitor), and notable native macOS/iOS/Swift apps and frameworks (iina, Plash, vapor, Swiftcord). NOT ordinary web apps.",
+  },
 ];
 
 export const UNCATEGORIZED_SLUG = "uncategorized";
