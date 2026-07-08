@@ -58,10 +58,6 @@ async function runGraphQL(query: string, attempt = 0): Promise<any> {
   return parsed.data;
 }
 
-function esc(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
 // ---- Reading ----
 
 export interface ListMeta {
@@ -76,17 +72,32 @@ export interface ListMeta {
 export async function fetchLists(): Promise<{
   byName: Map<string, ListMeta>;
   assigned: Set<string>;
-  membership: Map<string, string[]>;
+  membership: Map<string, ListMeta[]>;
 }> {
-  const listsData = await runGraphQL(`
-    { viewer { lists(first: 50) { nodes { id name } } } }
-  `);
-  const nodes: ListMeta[] = listsData.viewer.lists.nodes;
+  const nodes: ListMeta[] = [];
+  let listsAfter: string | null = null;
+  while (true) {
+    const afterArg = listsAfter ? `, after: "${listsAfter}"` : "";
+    const listsData = await runGraphQL(`
+      {
+        viewer {
+          lists(first: 100${afterArg}) {
+            pageInfo { hasNextPage endCursor }
+            nodes { id name }
+          }
+        }
+      }
+    `);
+    const conn = listsData.viewer.lists;
+    for (const n of conn.nodes) nodes.push({ id: n.id, name: n.name });
+    if (!conn.pageInfo.hasNextPage) break;
+    listsAfter = conn.pageInfo.endCursor;
+  }
   const byName = new Map<string, ListMeta>();
   for (const n of nodes) byName.set(n.name, { id: n.id, name: n.name });
 
   const assigned = new Set<string>();
-  const membership = new Map<string, string[]>();
+  const membership = new Map<string, ListMeta[]>();
   for (const list of nodes) {
     let after: string | null = null;
     while (true) {
@@ -108,9 +119,10 @@ export async function fetchLists(): Promise<{
       for (const it of items.nodes) {
         if (!it?.id) continue;
         assigned.add(it.id);
-        (membership.get(it.id) ?? membership.set(it.id, []).get(it.id)!).push(
-          list.name,
-        );
+        (membership.get(it.id) ?? membership.set(it.id, []).get(it.id)!).push({
+          id: list.id,
+          name: list.name,
+        });
       }
       if (!items.pageInfo.hasNextPage) break;
       after = items.pageInfo.endCursor;
@@ -135,7 +147,7 @@ async function repairMissingCommits(repos: Repo[]): Promise<void> {
       batch
         .map((r, j) => {
           const [owner, name] = r.nameWithOwner.split("/");
-          return `r${j}: repository(owner:"${esc(owner!)}", name:"${esc(name!)}"){ defaultBranchRef{target{... on Commit{committedDate}}} }`;
+          return `r${j}: repository(owner:${JSON.stringify(owner!)}, name:${JSON.stringify(name!)}){ defaultBranchRef{target{... on Commit{committedDate}}} }`;
         })
         .join(" ") +
       "}";
@@ -209,8 +221,8 @@ export async function createList(
   const data = await runGraphQL(`
     mutation {
       createUserList(input: {
-        name: "${esc(name)}",
-        description: "${esc(description)}",
+        name: ${JSON.stringify(name)},
+        description: ${JSON.stringify(description)},
         isPrivate: ${isPrivate}
       }) {
         list { id name }

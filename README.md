@@ -47,11 +47,16 @@ Flags: `--apply` (write; dry run by default), `--limit N`, `--resort`.
 
 ## Configuring categories
 
-The lists and their AI-facing descriptions live in [`src/config.ts`](src/config.ts); the classification rules are in [`src/classify.ts`](src/classify.ts). After editing them, delete `cache.json` to force reclassification.
+The lists and their AI-facing descriptions live in [`src/config.ts`](src/config.ts); the classification rules are in [`src/classify.ts`](src/classify.ts). After editing them, run `--recategorize` (preferred — it re-sorts everything the tool previously filed and updates the cache). Deleting `cache.json` also forces reclassification, but it wipes the tool's record of which repos it owns, so `--resort`/`--recategorize` can no longer operate on already-sorted repos — prefer `--recategorize` over deleting the cache.
+
+Don't rename a list's `listName` in the config without also renaming (or deleting) the corresponding list on GitHub — otherwise you get a duplicate list and the old one lingers.
 
 ## Notes
 
 - AI decisions are cached in `cache.json`, so re-runs don't re-ask the model and an interrupted run resumes where it left off.
+- `cache.json` also tracks the ids of the lists the tool manages (`managed`), so a managed list you rename in the UI is still recognized as the tool's (by id) and not mistaken for a manual list. This kicks in once the tool has written to that list at least since this behavior was added — a list renamed before its id was ever recorded isn't recognized.
+- **`--recategorize` replaces a repo's tool-managed list membership with the fresh AI decision.** Only your *manual* (non-managed) lists are preserved. So if you manually move a tool-sorted repo from one managed list to another in the UI, `--recategorize` will overwrite that move; put the repo in a manual list instead if you want the placement to stick.
+- Entries for repos you've unstarred are pruned from `cache.json` on the next run.
 - Writes are throttled (~250 ms between mutations) with backoff on GitHub's secondary rate limits.
 - `updateUserListsForItem` has set semantics (it sets the full list membership of a repo) — safe only for "naked" stars.
 

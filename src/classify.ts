@@ -7,6 +7,7 @@ import {
   UNCATEGORIZED_SLUG,
   type Repo,
 } from "./config";
+import { normalizeSlugs } from "./rules";
 
 const MODEL = "claude-haiku-4-5";
 const BATCH_SIZE = 40;
@@ -67,15 +68,6 @@ function repoLine(r: Repo): string {
   const head = parts.join(" ");
   const desc = r.description ? `: ${r.description}` : "";
   return `${head}${desc}`;
-}
-
-// Normalize a raw model list of slugs: keep only known slugs; drop
-// 'uncategorized' if combined with real lists; fall back to ['uncategorized'].
-function normalizeSlugs(raw: string[]): string[] {
-  const known = raw.filter((s) => ALL_SLUGS.includes(s));
-  const real = known.filter((s) => s !== UNCATEGORIZED_SLUG);
-  const uniq = [...new Set(real.length ? real : [UNCATEGORIZED_SLUG])];
-  return uniq;
 }
 
 async function classifyBatch(batch: Repo[]): Promise<Map<string, string[]>> {
